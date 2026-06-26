@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="css/style.css">
     <style>
         @media (min-width: 1200px) {
             .booking-form-inner {
@@ -52,7 +52,7 @@
     <!-- HEADER -->
     <header id="mainHeader">
         <a href="index.html" class="logo" style="display: flex; align-items: center; gap: 10px; text-decoration: none;">
-            <img src="../img/hed-logo.png" alt="FleetX Logo" style="height: 35px; width: auto; object-fit: contain;">
+            <img src="img/hed-logo.png" alt="FleetX Logo" style="height: 35px; width: auto; object-fit: contain;">
             FLEET<span>X</span>
         </a>
         <nav>
@@ -61,7 +61,11 @@
                 <li><a href="booking.html" class="active">Services</a></li>
                 <li><a href="index.html#how-it-works">How It Works</a></li>
                 <li><a href="about.html">About</a></li>
-                <li id="navAuthArea"></li>
+                <li id="navAuthArea">
+                    <a href="#" onclick="fxOpenAuthPanel(); return false;" class="fx-login-trigger" id="fxLoginBtn" style="padding:9px 22px;font-size:13px;display:flex;align-items:center;gap:8px;text-decoration:none; background: var(--accent, #ffcc00); color: #000; font-weight: 700; border-radius: 8px; transition: opacity 0.2s, transform 0.2s;" onmouseover="this.style.opacity='0.9'; this.style.transform='translateY(-1px)';" onmouseout="this.style.opacity='1'; this.style.transform='translateY(0)';">
+                        <i class="fas fa-lock" style="font-size:11px;"></i> Login
+                    </a>
+                </li>
             </ul>
         </nav>
     </header>
@@ -361,7 +365,7 @@
         <div class="footer-grid">
             <div class="footer-col">
                 <a href="index.html" class="logo" style="font-size:22px;display:inline-flex;align-items:center;gap:10px;margin-bottom:20px;text-decoration:none;">
-                    <img src="../img/hed-logo.png" alt="FleetX Logo" style="height: 30px; width: auto; object-fit: contain;">
+                    <img src="img/hed-logo.png" alt="FleetX Logo" style="height: 30px; width: auto; object-fit: contain;">
                     FLEET<span>X</span>
                 </a>
                 <p>Sri Lanka's premier digital transit infrastructure — executive reliability, premium comfort, and completely transparent fixed-tariff travel.</p>
@@ -404,6 +408,7 @@
         </div>
     </footer>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="auth.js"></script>
     <script>
         // ── Preloader & Header ────────────────────────────────────
@@ -656,24 +661,55 @@
             }, 'book');
         }
 
-        function proceedToBook(user, pickup, drop) {
+        async function proceedToBook(user, pickup, drop) {
             const btn = document.getElementById('bookNowBtn');
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Dispatching...';
 
-            setTimeout(() => {
-                // Generate booking ID
-                const bookingId = 'FTX-' + Math.floor(10000 + Math.random() * 90000);
-                const cfg = TIER_CONFIG[selectedTier];
-                const total = selectedBase + (simDistance * selectedRate) + 50;
+            const bookingId = 'FTX-' + Math.floor(10000 + Math.random() * 90000);
+            const total = selectedBase + (simDistance * selectedRate) + 50;
 
-                // Save to localStorage history
-                const history = JSON.parse(localStorage.getItem('fleetx_bookings') || '[]');
-                history.unshift({
-                    id: bookingId, service: selectedTierName, pickup, drop,
-                    fare: total, date: new Date().toISOString(), status: 'pending'
-                });
-                localStorage.setItem('fleetx_bookings', JSON.stringify(history.slice(0, 10)));
+            if (!supabase) {
+                fxShowToast('Database connection offline.', 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-bolt"></i> Book This Ride';
+                return;
+            }
+
+            if (user.id === '11111111-1111-4111-8111-111111111111') {
+                document.getElementById('confirmId').textContent = bookingId;
+                document.getElementById('confService').textContent = selectedTierName;
+                document.getElementById('confPickup').textContent = pickup;
+                document.getElementById('confDrop').textContent = drop;
+                document.getElementById('confFare').textContent = `LKR ${total.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+                document.getElementById('confirmOverlay').classList.add('open');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-bolt"></i> Book This Ride';
+                return;
+            }
+
+            try {
+                const insertPromise = supabase
+                    .from('bookings')
+                    .insert({
+                        id: bookingId,
+                        user_id: user.id,
+                        user_email: user.email,
+                        service: selectedTierName,
+                        pickup: pickup,
+                        drop: drop,
+                        fare: total,
+                        date: new Date().toISOString(),
+                        status: 'pending'
+                    });
+
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Request timed out after 8s. Please verify connection.')), 8000)
+                );
+
+                const { error } = await Promise.race([insertPromise, timeoutPromise]);
+
+                if (error) throw error;
 
                 // Show confirmation
                 document.getElementById('confirmId').textContent = bookingId;
@@ -684,10 +720,13 @@
                     `LKR ${total.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
 
                 document.getElementById('confirmOverlay').classList.add('open');
-
+            } catch (err) {
+                console.error(err);
+                fxShowToast('Booking failed: ' + (err.message || err), 'error');
+            } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-bolt"></i> Book This Ride';
-            }, 1800);
+            }
         }
 
         function closeConfirm() {
