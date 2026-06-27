@@ -26,7 +26,12 @@
             <img src="img/hed-logo.png" alt="FleetX Logo" style="height: 35px; width: auto; object-fit: contain;">
             FLEET<span>X</span>
         </a>
-        <nav>
+        <button class="nav-toggle" id="navToggle" aria-label="Toggle Navigation">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+        <nav id="navMenu">
             <ul>
                 <li><a href="index.html" class="active">Home</a></li>
                 <li><a href="booking.html">Services</a></li>
@@ -339,6 +344,16 @@
             entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
         }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
         reveals.forEach(el => revObs.observe(el));
+
+        // Hamburger Menu Toggle
+        const navToggle = document.getElementById('navToggle');
+        const navMenu = document.getElementById('navMenu');
+        if (navToggle && navMenu) {
+            navToggle.addEventListener('click', () => {
+                navToggle.classList.toggle('open');
+                navMenu.classList.toggle('active');
+            });
+        }
     </script>
 </body>
 
