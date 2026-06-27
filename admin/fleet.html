@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FleetX | Admin Control Terminal</title>
-    <link rel="icon" type="image/png" href="../img/hed-logo.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="../css/style.css">
     <style>
@@ -608,6 +607,7 @@
                     .order('date', { ascending: false });
 
                 if (error) throw error;
+                window._fleetBookings = bookings;
 
                 const bookingsBody = document.getElementById('bookingsTableBody');
                 bookingsBody.innerHTML = '';
@@ -731,11 +731,41 @@
                 if (error) throw error;
 
                 fxShowToast(`Dispatch Request ${newStatus === 'confirmed' ? 'Approved' : 'Rejected'}!`);
+
+                const booking = window._fleetBookings ? window._fleetBookings.find(b => b.id === id) : null;
+                if (booking) {
+                    sendBookingNotifications(booking, newStatus);
+                }
+
                 renderBookings();
                 renderOverview();
             } catch (err) {
                 console.error(err);
                 fxShowToast('Failed to update booking: ' + (err.message || err), 'error');
+            }
+        }
+
+        async function sendBookingNotifications(booking, status) {
+            fxShowToast(`Connecting to dispatch server for ${status} alerts...`);
+
+            try {
+                const response = await fetch('/api/send-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ booking: booking, status: status })
+                });
+
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    fxShowToast(`SMS & Email alerts dispatched for #${booking.id}! ✉️💬`);
+                } else {
+                    console.warn('Backend notification response:', data);
+                    const errMsg = data.error?.message || data.error || 'Server error';
+                    fxShowToast('Alert notice: ' + (typeof errMsg === 'string' ? errMsg : JSON.stringify(errMsg)), 'info');
+                }
+            } catch (err) {
+                console.error('Notification dispatch error:', err);
+                fxShowToast('Note: SMS & Email alerts require live Vercel deployment.', 'info');
             }
         }
 
